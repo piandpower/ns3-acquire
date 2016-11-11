@@ -38,5 +38,8 @@ class ArticleRoute(Resource):
         filtered = Article.query.filter_by(topic=topic).all()
         return [article.body for article in filtered]
 
+@public_ns.route('/refresh')
+class Refresh(Resource):
+
     def post(self):
         ''' refresh db '''
