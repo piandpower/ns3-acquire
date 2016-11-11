@@ -1,0 +1,1 @@
+web: gunicorn acquire.app:app --log-file -  
