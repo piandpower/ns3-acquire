@@ -5,8 +5,7 @@ from flask_sqlalchemy import SQLAlchemy
 import requests
 import lxml
 from lxml import html
-import BeautifulSoup
-from BeautifulSoup import BeautifulSoup
+from bs4 import BeautifulSoup
 
 app = Flask(__name__)
 
@@ -24,15 +23,17 @@ db = SQLAlchemy(app)
 class Article(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
+    url = db.Column(db.String(256))
     topic = db.Column(db.String(1024))
     body = db.Column(db.String(65536))
 
-    def __init__(self, topic, body):
+    def __init__(self, topic, body, url):
         self.topic = topic
         self.body = body
+        self.url = url
 
     def __repr__(self):
-        return self.topic + ' ' + str(len(self.body))
+        return self.topic + ' ' + self.url
 
 
 @public_ns.route('/articles/<string:topic>')
@@ -47,35 +48,43 @@ class Refresh(Resource):
 
     def post(self):
         ''' refresh db '''
-        return self.pullBodyOfURL("http://www.nytimes.com/2016/11/08/science/bats-wind-power-turbines.html");
+        return self.topNArticles('wind power', 10)
+        # return self.pullBodyOfURL("http://www.nytimes.com/2016/11/08/science/bats-wind-power-turbines.html");
          
     
     def topNArticles(self, topic, n): 
         urlString = "https://api.nytimes.com/svc/search/v2/articlesearch.json"
-        #to do: add custom topic
-        urlString = urlString + "?q=wind+power" + "&api-key=61f3909960f048909642771cedab3b76" + "&response-format=jsonp" + "&callback=svc_search_v2_articlesearch"
-        data = '{"query":{"bool":{"must":[{"text":{"record.document":"SOME_JOURNAL"}},{"text":{"record.articleTitle":"farmers"}}],"must_not":[],"should":[]}},"from":0,"size":50,"sort":[],"facets":{}}'
-        response = requests.get(urlString, data = data)
-        docs = response.json()["docs"]
-        
-        for i in range(0, len(docs)):
-            doc = docs[i];
+        urlString = urlString + "?q=" + topic.replace(' ', '+') + "&api-key=61f3909960f048909642771cedab3b76" + "&response-format=jsonp" + "&callback=svc_search_v2_articlesearch"
+        # data = '{"query":{"bool":{"must":[{"text":{"record.document":"SOME_JOURNAL"}},{"text":{"record.articleTitle":"farmers"}}],"must_not":[],"should":[]}},"from":0,"size":50,"sort":[],"facets":{}}'
+        response = requests.get(urlString)
+        docs = response.json()['response']['docs']
+        articles = []
+        for doc in docs:
             article_url = doc["web_url"]
-
+            text = self.pullBodyOfURL(article_url)
+            new_article = Article(topic, text, article_url)
+            if not Article.query.filter_by(url=article_url).first():
+                db.session.add(new_article)
+        db.session.commit()
+        return [article.url for article in Article.query.filter_by(topic=topic).limit(n)]
     
+    def get_contents(self, tag, arr):
+        if len(tag.contents):
+            for subtag in tag.contents:
+                if subtag.string:
+                    arr.append(subtag.string)
+                elif len(subtag.contents):
+                    self.get_contents(subtag, arr)
+        else:
+            arr.append(tag.string)
+
     def pullBodyOfURL(self, url):
         page = requests.get(url)
         html_content = page.text
         soup = BeautifulSoup(html_content, 'lxml')
-        storyList = soup.find_all('p', 'story-body-text story-content')
-        storyText = " ".join(storyList) #join by space
+        tags = [tag for tag in soup.find_all('p', 'story-body-text story-content')]
+        strings = []
+        for tag in tags:
+            self.get_contents(tag, strings)
+        storyText = " ".join(strings)
         return storyText
-
-
-
-        #tree = html.fromstring(page.content)
-        #storyList = tree.xpath('//p[@class="story-body-text story-content"]/text()')
-        #storyText = " ".join(storyList) #join by space
-        #return storyText
-
-

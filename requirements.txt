@@ -4,3 +4,5 @@ gunicorn
 requests
 psycopg2
 Flask-SQLAlchemy
+lxml
+BeautifulSoup4
