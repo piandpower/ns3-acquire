@@ -31,12 +31,12 @@ class Article(db.Model):
         return self.topic + ' ' + str(len(self.body))
 
 
-@public_ns.route('/articles')
+@public_ns.route('/articles/<string:topic>')
 class ArticleRoute(Resource):
 
-    @public_ns.param('topic', 'the topic to look for')
-    def get(topic):
-        return [article.body for article in Article.query.filter_by(topic=topic)]
+    def get(self, topic):
+        filtered = Article.query.filter_by(topic=topic).all()
+        return [article.body for article in filtered]
 
     def post(self):
         ''' refresh db '''
