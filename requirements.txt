@@ -2,3 +2,5 @@ flask-restplus
 flask-ask
 gunicorn
 requests
+psycopg2
+Flask-SQLAlchemy
