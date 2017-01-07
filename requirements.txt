@@ -1,7 +1,7 @@
 flask-restplus
 flask-ask
 gunicorn
-requests
+requests==2.10.0
 psycopg2
 Flask-SQLAlchemy
 lxml

@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 import os, logging
 from flask import Flask, request, render_template, jsonify
 from flask_restplus import Api, Resource
@@ -6,12 +7,16 @@ import requests
 import lxml
 from lxml import html
 from bs4 import BeautifulSoup
+from theguardian import theguardian_tag
+from theguardian import theguardian_content
+import sys
 
 app = Flask(__name__)
 
 ROOT_URL = os.getenv('ROOT_URL', 'localhost')
 VERSION_NO = os.getenv('VERSION_NO', '1.0')
 APP_NAME = os.getenv('APP_NAME', "Devil's Advocate")
+GUAR_KEY = os.getenv('GUAR_KEY')
 DEBUG = os.getenv('DEBUG', False)
 api = Api(app, version=VERSION_NO, title=APP_NAME)
 public_ns = api.namespace('Public', description='Public methods')
@@ -48,7 +53,8 @@ class Refresh(Resource):
 
     def post(self):
         ''' refresh db '''
-        return self.topNArticles('wind power', 10)
+        return self.getGuardianArticles("wind power")
+        # return self.topNArticles('wind power', 10)
         # return self.pullBodyOfURL("http://www.nytimes.com/2016/11/08/science/bats-wind-power-turbines.html");
          
     
@@ -88,3 +94,15 @@ class Refresh(Resource):
             self.get_contents(tag, strings)
         storyText = " ".join(strings)
         return storyText
+
+    def getGuardianArticles(self, topic):
+        header = {
+                "q": topic,
+                "type": "article"
+            }
+        content_articles = theguardian_content.Content(GUAR_KEY, **header)
+        content_articles_data = content_articles.get_content_response()
+        results = content_articles.get_results(content_articles_data)
+
+        webTitles = [result["webUrl"] for result in results]
+        return ("{title}" .format(title=webTitles))
