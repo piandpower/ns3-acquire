@@ -23,6 +23,7 @@ DEBUG = os.getenv('DEBUG', False)
 api = Api(app, version=VERSION_NO, title=APP_NAME)
 public_ns = api.namespace('Public', description='Public methods')
 
+
 DATABASE = os.getenv("DATABASE_URL", 'postgres://localhost')
 app.config['SQLALCHEMY_DATABASE_URI'] = DATABASE
 db = SQLAlchemy(app)
@@ -75,8 +76,6 @@ class Refresh(Resource):
         bodies = NYT_bodies + GUAR_bodies
         sources = self.createSourceArray(len(NYT_urls), "New York Times") + self.createSourceArray(len(GUAR_urls), "The Guardian")
 
-        print(sources)
-
         for (article_url, body, source) in zip(urls, bodies, sources):
             new_article = Article(topic, body, article_url, source)
             if not Article.query.filter_by(url=article_url).first():
@@ -99,6 +98,10 @@ class Refresh(Resource):
         page = requests.get(url)
         html_content = page.text
         soup = BeautifulSoup(html_content, 'lxml')
+        if (source == "guardian"):
+            print ("~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~")
+            print (soup)
+        sys.stdout.flush()
         tags = [tag for tag in soup.find_all('p', self.classTagFromSource(source))]
         strings = []
         for tag in tags:
