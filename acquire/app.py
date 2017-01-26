@@ -72,15 +72,28 @@ class Refresh(Resource):
         NYT_bodies = self.pullBodyFromURLSet(NYT_urls, "new york times")
         GUAR_bodies = self.pullBodyFromURLSet(GUAR_urls, "guardian")
         
-        urls = NYT_urls + GUAR_urls
-        bodies = NYT_bodies + GUAR_bodies
-        sources = self.createSourceArray(len(NYT_urls), "New York Times") + self.createSourceArray(len(GUAR_urls), "The Guardian")
+        NYT_objs = self.createArticlePythonObjects(NYT_urls, NYT_bodies, "New York Times")
+        GUAR_objs = self.createArticlePythonObjects(GUAR_urls, GUAR_bodies, "The Guardian")
+       
+        allObjs = [None]*(len(NYT_objs)+len(GUAR_objs))
+        allObjs[::2] = NYT_objs
+        allObjs[1::2] = GUAR_objs
 
-        for (article_url, body, source) in zip(urls, bodies, sources):
+        for article in allObjs:
+           new_article = Article(topic, article["body"], article["url"], article["source"])
+           if not Article.query.filter_by(url=article["url"]).first():
+                db.session.add(new_article)
+        db.session.commit()
+       
+        '''urls = NYT_urls + GUAR_urls
+        bodies = NYT_bodies + GUAR_bodies
+        sources = self.createSourceArray(len(NYT_urls), "New York Times") + self.createSourceArray(len(GUAR_urls), "The Guardian")'''
+
+        '''for (article_url, body, source) in zip(urls, bodies, sources):
             new_article = Article(topic, body, article_url, source)
             if not Article.query.filter_by(url=article_url).first():
                 db.session.add(new_article)
-        db.session.commit()
+        db.session.commit()'''
 
         return [article.url for article in Article.query.filter_by(topic=topic).limit(n)]
     
@@ -94,24 +107,64 @@ class Refresh(Resource):
         else:
             arr.append(tag.string)
 
+    def createArticlePythonObjects(self, urls, bodies, source):
+        objs = []
+        for (url, body) in zip(urls, bodies):
+            articleObj = {
+                "url": url,
+                "body": body,
+                "source": source
+            }
+            objs.append(articleObj)
+        return objs
+
     def pullBodyOfURL(self, url, source):
         page = requests.get(url)
         html_content = page.text
         soup = BeautifulSoup(html_content, 'lxml')
-        if (source == "guardian"):
-            print ("~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~")
-            print (soup)
-        sys.stdout.flush()
-        tags = [tag for tag in soup.find_all('p', self.classTagFromSource(source))]
-        strings = []
-        for tag in tags:
-            self.get_contents(tag, strings)
+
+        strings = self.pullStringsFromBodyFromSource(soup, source)
+
+        '''if (url == "https://www.nytimes.com/2016/12/09/opinion/what-cities-and-states-can-do-about-the-climate.html"):
+            print (strings)
+            sys.stdout.flush()
+        elif (url == "https://www.theguardian.com/business/2017/jan/06/uk-wind-power-coal-green-groups-carbon-taxes"):
+            print (strings)    
+            sys.stdout.flush()'''
+
         storyText = " ".join(strings)
         return storyText
+
+    # each source has a different HTML structure
+    def pullStringsFromBodyFromSource(self, soup, source):
+        if (source == "new york times"):
+            tags = [tag for tag in soup.find_all('p', self.classTagFromSource(source))]
+            strings = []
+            for tag in tags:
+                self.get_contents(tag, strings)
+            
+            return strings
+
+        elif (source == "guardian"):
+            tags = [tag for tag in soup.find_all('div', self.divClassTagFromSource(source))]
+            strings = []    
+            for x in tags:
+                paras = x.find_all('p')
+                for para in paras:
+                    strings.append(para.text)
+            return strings
+
 
     def classTagFromSource(self, source):
         if source == "new york times":
             return 'story-body-text story-content'
+        elif source == "guardian":
+            return 'content__article-body from-content-api js-article__body'
+
+
+    def divClassTagFromSource(self, source):
+        if source == "new york times":
+            return 'story-body story-body-1'
         elif source == "guardian":
             return 'content__article-body from-content-api js-article__body'
 
@@ -129,11 +182,12 @@ class Refresh(Resource):
 
     def getNYTArticles(self, topic):
         urlString = "https://api.nytimes.com/svc/search/v2/articlesearch.json"
-        urlString = urlString + "?q=" + topic.replace(' ', '+') + "&api-key=" + NYT_KEY + "&response-format=jsonp" + "&callback=svc_search_v2_articlesearch"
+        urlString = urlString + "?q=" + topic.replace(' ', '+') + "&fq=document_type:(\"article\")" + "&api-key=" + NYT_KEY + "&response-format=jsonp" + "&callback=svc_search_v2_articlesearch"
         
         response = requests.get(urlString)
         docs = response.json()['response']['docs']
         webUrls = [doc["web_url"] for doc in docs]
+
         return webUrls
 
     def pullBodyFromURLSet(self, urlSet, source):
