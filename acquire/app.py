@@ -18,6 +18,7 @@ VERSION_NO = os.getenv('VERSION_NO', '1.0')
 APP_NAME = os.getenv('APP_NAME', "Devil's Advocate")
 GUAR_KEY = os.getenv('GUAR_KEY')
 NYT_KEY = os.getenv('NYT_KEY')
+BING_KEY = os.getenv('BING_KEY')
 DEBUG = os.getenv('DEBUG', False)
 api = Api(app, version=VERSION_NO, title=APP_NAME)
 public_ns = api.namespace('Public', description='Public methods')
@@ -32,11 +33,13 @@ class Article(db.Model):
     url = db.Column(db.String(256))
     topic = db.Column(db.String(1024))
     body = db.Column(db.String(65536))
+    source = db.Column(db.String(1024))
 
-    def __init__(self, topic, body, url):
+    def __init__(self, topic, body, url, source):
         self.topic = topic
         self.body = body
         self.url = url
+        self.source = source
 
     def __repr__(self):
         return self.topic + ' ' + self.url
@@ -70,9 +73,12 @@ class Refresh(Resource):
         
         urls = NYT_urls + GUAR_urls
         bodies = NYT_bodies + GUAR_bodies
+        sources = self.createSourceArray(len(NYT_urls), "New York Times") + self.createSourceArray(len(GUAR_urls), "The Guardian")
 
-        for (article_url, body) in zip(urls, bodies):
-            new_article = Article(topic, body, article_url)
+        print(sources)
+
+        for (article_url, body, source) in zip(urls, bodies, sources):
+            new_article = Article(topic, body, article_url, source)
             if not Article.query.filter_by(url=article_url).first():
                 db.session.add(new_article)
         db.session.commit()
@@ -132,4 +138,26 @@ class Refresh(Resource):
         return bodyList
         
         
+    def getBingArticles(self, topic):
+        headers = {
+                # Request headers
+                'Ocp-Apim-Subscription-Key': BING_KEY,
+        }
 
+        params = urllib.parse.urlencode({
+                # Request parameters
+                'q': topic,
+                'count': '10',
+                'offset': '0',
+                'mkt': 'en-us',
+        })
+
+        requests.get("https://api.cognitive.microsoft.com/bing/v5.0/news/search", headers=headers, params=params)
+
+    def createSourceArray(self, size, source):
+        sourceArr = []
+
+        for i in range(0, size):
+            sourceArr.append(source)
+            
+        return sourceArr
