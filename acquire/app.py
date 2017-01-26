@@ -50,7 +50,7 @@ class ArticleRoute(Resource):
 
     def get(self, topic):
         filtered = Article.query.filter_by(topic=topic).all()
-        return [article.url for article in filtered]
+        return [{'article': article.body, 'url': article.url, 'source': article.source} for article in filtered]
 
 @public_ns.route('/refresh')
 class Refresh(Resource):
